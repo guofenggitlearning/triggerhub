@@ -201,6 +201,7 @@ github.com/valyala/fasthttp v1.22.0 h1:OpwH5KDOJ9cS2bq8fD+KfT4IrksK0llvkHf4MZx42
 github.com/valyala/fasthttp v1.22.0/go.mod h1:0mw2RjXGOzxf4NL2jni3gUQ7LfjjUSiG5sskOUUSEpU=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a h1:0R4NLDRDZX6JcmhJgXi5E4b8Wg84ihbmUKp/GvSPEzc=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
+github.com/walle/targz v0.0.0-20140417120357-57fe4206da5a h1:6cKSHLRphD9Fo1LJlISiulvgYCIafJ3QfKLimPYcAGc=
 github.com/walle/targz v0.0.0-20140417120357-57fe4206da5a/go.mod h1:nccQrXCnc5SjsThFLmL7hYbtT/mHJcuolPifzY5vJqE=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=

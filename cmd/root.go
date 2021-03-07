@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/brickpop/packerd/rand"
@@ -16,7 +15,9 @@ var (
 		Use:   "packerd",
 		Short: "Packerd is a backup utility for authenticated remote clients",
 		Long:  `Packerd is a backup utility for authenticated remote clients`,
-		Run:   mainHandler,
+		Run: func(cmd *cobra.Command, args []string) {
+			server.Run()
+		},
 	}
 )
 
@@ -26,22 +27,6 @@ func Execute() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-}
-
-// MAIN ENTRY POINT
-func mainHandler(cmd *cobra.Command, args []string) {
-	var configFile = viper.GetString("config")
-	var port = viper.GetInt("port")
-	var authToken = viper.GetString("token")
-	var useTLS = viper.GetBool("tls")
-	var cert = viper.GetString("cert")
-	var key = viper.GetString("key")
-
-	if configFile != "" {
-		log.Output(1, fmt.Sprintf("Using config file %s", configFile))
-	}
-
-	server.Run(port, authToken, useTLS, cert, key)
 }
 
 func init() {

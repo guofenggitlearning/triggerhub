@@ -4,21 +4,38 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
+	"os"
+	"time"
 
 	fiber "github.com/gofiber/fiber/v2"
+	"github.com/spf13/viper"
+	"github.com/walle/targz"
 )
 
-// Run starts a server and listens for requests
-func Run(port int, authToken string, useTLS bool, cert string, key string) {
-	// info
-	log.Output(1, fmt.Sprintf("Running with token %s", authToken))
+const srcPath = "/some/path/here"
 
+// Run starts a server and listens for requests
+func Run() {
+	var configFile = viper.GetString("config")
+	var port = viper.GetInt("port")
+	var authToken = viper.GetString("token")
+	var useTLS = viper.GetBool("tls")
+	var cert = viper.GetString("cert")
+	var key = viper.GetString("key")
+
+	// info
 	if useTLS {
 		if cert == "" || key == "" {
 			log.Fatal("The certificate and key file are needed to run with TLS enabled")
 		}
-		log.Output(1, "TLS enabled")
+		log.Println("TLS enabled")
 	}
+
+	// info
+	if configFile != "" {
+		log.Println("Using config file", configFile)
+	}
+	log.Println("Running with token", authToken)
 
 	// Service set up
 	app := fiber.New()
@@ -52,18 +69,39 @@ func Run(port int, authToken string, useTLS bool, cert string, key string) {
 			log.Fatal(err)
 		}
 
-		log.Output(1, fmt.Sprintf("Listening TLS on %s\n", addr))
+		log.Println("Listening TLS on", addr)
 		log.Fatal(app.Listener(ln))
 	} else {
 		addr := fmt.Sprintf(":%d", port)
-		log.Output(1, fmt.Sprintf("Listening HTTP on %s\n", addr))
+		log.Println("Listening HTTP on", addr)
 		log.Fatal(app.Listen(addr))
 	}
 }
 
 // handleGet handles the request to run a certain trigger
 func handleGet(ctx *fiber.Ctx) error {
-	log.Output(1, ctx.Params("id"))
-	log.Output(1, ctx.Params("token"))
-	return nil
+	var id = ctx.Params("id")
+	var token = ctx.Params("token")
+
+	if id == "" || token == "" {
+		ctx.Status(fiber.StatusNotFound)
+		return ctx.SendString("Not found")
+	}
+
+	outputFile := fmt.Sprintf("/tmp/packerd-%d.tar.gz", time.Now().UnixNano())
+
+	log.Println(fmt.Sprintf("[%s] Bundling %s into %s", id, srcPath, outputFile))
+	err := targz.Compress(srcPath, outputFile)
+	if err != nil {
+		ctx.Status(fiber.StatusInternalServerError)
+		log.Println(err)
+		return ctx.SendString("Internal server error")
+	}
+	err = ctx.SendFile(outputFile, false)
+	if err != nil {
+		return err
+	}
+
+	err = os.Remove(outputFile)
+	return err
 }
