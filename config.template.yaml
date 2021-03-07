@@ -1,0 +1,11 @@
+port: 8080
+tls: false
+cert:
+key:
+paths:
+- id: images
+  path: /path/to/files
+  token: 1234
+- id: media
+  path: /path/to/media
+  token: 2345

@@ -7,12 +7,14 @@ import (
 	"os"
 	"time"
 
+	"github.com/brickpop/packerd/config"
+
 	fiber "github.com/gofiber/fiber/v2"
 	"github.com/spf13/viper"
 	"github.com/walle/targz"
 )
 
-const srcPath = "/some/path/here"
+var paths []config.PathEntry
 
 // Run starts a server and listens for requests
 func Run() {
@@ -36,6 +38,12 @@ func Run() {
 		log.Println("Using config file", configFile)
 	}
 	log.Println("Running with token", authToken)
+
+	// config entries
+	err := viper.UnmarshalKey("paths", &paths)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Service set up
 	app := fiber.New()
@@ -90,6 +98,24 @@ func handleGet(ctx *fiber.Ctx) error {
 
 	outputFile := fmt.Sprintf("/tmp/packerd-%d.tar.gz", time.Now().UnixNano())
 
+	srcPath := ""
+	found := false
+	for i := 0; i < len(paths); i++ {
+		if paths[i].ID == id {
+			if paths[i].Token == token {
+				found = true
+				srcPath = paths[i].Path
+				break
+			}
+			ctx.Status(fiber.StatusNotFound)
+			return ctx.SendString("Not found")
+		}
+	}
+	if !found {
+		ctx.Status(fiber.StatusNotFound)
+		return ctx.SendString("Not found")
+	}
+
 	log.Println(fmt.Sprintf("[%s] Bundling %s into %s", id, srcPath, outputFile))
 	err := targz.Compress(srcPath, outputFile)
 	if err != nil {
@@ -97,6 +123,7 @@ func handleGet(ctx *fiber.Ctx) error {
 		log.Println(err)
 		return ctx.SendString("Internal server error")
 	}
+
 	err = ctx.SendFile(outputFile, false)
 	if err != nil {
 		return err

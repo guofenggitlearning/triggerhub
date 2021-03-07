@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/brickpop/packerd/rand"
+	"github.com/brickpop/packerd/config"
 	"github.com/brickpop/packerd/server"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -30,37 +29,15 @@ func Execute() {
 }
 
 func init() {
-	cobra.OnInitialize(initConfig)
+	cobra.OnInitialize(func() {
+		config.Init(rootCmd)
+	})
 
+	// Read flags
 	rootCmd.PersistentFlags().String("config", "", "the config file to use")
 	rootCmd.PersistentFlags().String("token", "", "the auth token to use for clients")
 	rootCmd.PersistentFlags().String("cert", "", "the certificate file (TLS only)")
 	rootCmd.PersistentFlags().String("key", "", "the TLS encryption key file")
 	rootCmd.PersistentFlags().Bool("tls", false, "whether to use TLS encryption")
 	rootCmd.PersistentFlags().IntP("port", "p", 80, "port to bind to")
-
-	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	viper.BindPFlag("token", rootCmd.PersistentFlags().Lookup("token"))
-	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("cert", rootCmd.PersistentFlags().Lookup("cert"))
-	viper.BindPFlag("key", rootCmd.PersistentFlags().Lookup("key"))
-	viper.BindPFlag("tls", rootCmd.PersistentFlags().Lookup("tls"))
-
-	// viper.SetDefault("author", "NAME HERE <EMAIL ADDRESS>")
-	viper.AddConfigPath(".")
-}
-
-func initConfig() {
-	var configFile = viper.GetString("config")
-
-	if viper.GetString("token") == "" {
-		viper.Set("token", rand.String(40))
-	}
-
-	viper.SetConfigFile(configFile)
-	// viper.AutomaticEnv()
-
-	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
-	}
 }
