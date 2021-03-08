@@ -1,2 +1,3 @@
-testpath
 *.tar.gz
+config.yaml
+build

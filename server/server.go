@@ -20,7 +20,6 @@ var paths []config.PathEntry
 func Run() {
 	var configFile = viper.GetString("config")
 	var port = viper.GetInt("port")
-	var authToken = viper.GetString("token")
 	var useTLS = viper.GetBool("tls")
 	var cert = viper.GetString("cert")
 	var key = viper.GetString("key")
@@ -37,7 +36,6 @@ func Run() {
 	if configFile != "" {
 		log.Println("Using config file", configFile)
 	}
-	log.Println("Running with token", authToken)
 
 	// config entries
 	err := viper.UnmarshalKey("paths", &paths)
@@ -96,8 +94,6 @@ func handleGet(ctx *fiber.Ctx) error {
 		return ctx.SendString("Not found")
 	}
 
-	outputFile := fmt.Sprintf("/tmp/packerd-%d.tar.gz", time.Now().UnixNano())
-
 	srcPath := ""
 	found := false
 	for i := 0; i < len(paths); i++ {
@@ -116,6 +112,9 @@ func handleGet(ctx *fiber.Ctx) error {
 		return ctx.SendString("Not found")
 	}
 
+	fileName := fmt.Sprintf("packerd-%d.tar.gz", time.Now().UnixNano())
+	outputFile := fmt.Sprintf("/tmp/%s", fileName)
+
 	log.Println(fmt.Sprintf("[%s] Bundling %s into %s", id, srcPath, outputFile))
 	err := targz.Compress(srcPath, outputFile)
 	if err != nil {
@@ -124,10 +123,11 @@ func handleGet(ctx *fiber.Ctx) error {
 		return ctx.SendString("Internal server error")
 	}
 
-	err = ctx.SendFile(outputFile, false)
+	err = ctx.Download(outputFile, fileName)
 	if err != nil {
 		return err
 	}
+	log.Println(fmt.Sprintf("[%s] Done", id))
 
 	err = os.Remove(outputFile)
 	return err

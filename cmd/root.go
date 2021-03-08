@@ -35,9 +35,8 @@ func init() {
 
 	// Read flags
 	rootCmd.PersistentFlags().String("config", "", "the config file to use")
-	rootCmd.PersistentFlags().String("token", "", "the auth token to use for clients")
 	rootCmd.PersistentFlags().String("cert", "", "the certificate file (TLS only)")
 	rootCmd.PersistentFlags().String("key", "", "the TLS encryption key file")
-	rootCmd.PersistentFlags().Bool("tls", false, "whether to use TLS encryption")
-	rootCmd.PersistentFlags().IntP("port", "p", 80, "port to bind to")
+	rootCmd.PersistentFlags().Bool("tls", false, "whether to use TLS encryption (cert and key required)")
+	rootCmd.PersistentFlags().IntP("port", "p", 8080, "port to bind to")
 }
