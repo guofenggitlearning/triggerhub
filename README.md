@@ -4,7 +4,7 @@ Packerd is a simple service that generates on-demand backup bundles and serves t
 
 ## Get started
 
-Compile the project with:
+[Download the Linux binary](https://github.com/brickpop/packerd/releases/download/v0.1.0/packerd.zip) or compile the project yourself:
 
 ```sh
 go build -o build/packerd
