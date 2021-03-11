@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/brickpop/packerd/config"
+	"github.com/brickpop/triggerhub/config"
 
 	fiber "github.com/gofiber/fiber/v2"
 	"github.com/spf13/viper"
@@ -112,7 +112,7 @@ func handleGet(ctx *fiber.Ctx) error {
 		return ctx.SendString("Not found")
 	}
 
-	fileName := fmt.Sprintf("packerd-%d.tar.gz", time.Now().UnixNano())
+	fileName := fmt.Sprintf("triggerhub-%d.tar.gz", time.Now().UnixNano())
 	outputFile := fmt.Sprintf("/tmp/%s", fileName)
 
 	log.Println(fmt.Sprintf("[%s] Bundling %s into %s", id, srcPath, outputFile))

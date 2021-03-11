@@ -1,4 +1,4 @@
-module github.com/brickpop/packerd
+module github.com/brickpop/triggerhub
 
 go 1.15
 

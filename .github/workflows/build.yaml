@@ -1,4 +1,4 @@
-name: Packerd Build
+name: Trigger Hub Build
 
 on:
   push:
@@ -31,7 +31,7 @@ jobs:
     # - name: Archive binary
     #   uses: actions/upload-artifact@v2
     #   with:
-    #     name: packerd
+    #     name: triggerhub
     #     path: dist
 
     - name: Run vet & lint

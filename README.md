@@ -1,13 +1,13 @@
-# Packerd
+# Trigger Hub
 
-Packerd is a simple service that generates on-demand backup bundles and serves them remotely to authorized clients.
+Trigger Hub is a simple service that listens for trigger events on HTTP clients and relays them to subscribed services that may not want to expose a dedicated port. In this way, triggers are pulled on the service instead of directly pushed by clients, which adds an extra layer of isolation.
 
 ## Get started
 
-[Download the Linux binary](https://github.com/brickpop/packerd/releases/download/v0.1.0/packerd.zip) or compile the project yourself:
+[Download the Linux binary](https://github.com/brickpop/triggerhub/releases/download/v0.1.0/triggerhub.zip) or compile the project yourself:
 
 ```sh
-go build -o build/packerd
+go build -o build/triggerhub
 ```
 
 ## Config
@@ -17,19 +17,22 @@ Parameters can be passed via command line of be defined in a config file
 ### Command line
 
 ```
-$ ./packerd -h
-Packerd is a backup utility for authenticated remote clients
+$ ./triggerhub -h
+Trigger Hub is a simple service that listens for trigger events on HTTP clients and relays them to subscribed services that may not want to expose a dedicated port.
 
 Usage:
-  packerd [flags]
+  triggerhub [command]
+
+Available Commands:
+  help        Help about any command
+  join        Joins a Trigger Hub server
+  serve       Start a dispatcher service
 
 Flags:
-      --cert string     the certificate file (TLS only)
       --config string   the config file to use
-  -h, --help            help for packerd
-      --key string      the TLS encryption key file
-  -p, --port int        port to bind to (default 80)
-      --tls             whether to use TLS encryption (cert and key required)
+  -h, --help            help for triggerhub
+
+Use "triggerhub [command] --help" for more information about a command.
 ```
 
 The config file is mandatory. However, CLI parameters can override the `port`, `cert`, `key` and `tls` for easier testing. 
@@ -56,7 +59,7 @@ paths:
 By default, `config.yaml` is attempted on the current directory. Otherwise:
 
 ```sh
-$ packerd --config my-config.yaml
+$ triggerhub --config my-config.yaml
 ```
 
 ## Fetching the back up remotely
@@ -75,10 +78,10 @@ $ curl https://my-server.net:8443/backup/$NAME/$TOKEN > $NAME.tar.gz
 $ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 10000 -nodes
 ```
 
-Then, run `packerd`:
+Then, run `triggerhub`:
 
 ```sh
-$ packerd --tls --cert cert.pem --key key.pem -p 8443
+$ triggerhub --tls --cert cert.pem --key key.pem -p 8443
 ```
 
 And finally, tell `curl` to accept the self-signed certificate.

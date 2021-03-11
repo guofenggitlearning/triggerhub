@@ -1,7 +1,7 @@
 package main
 
 import (
-	cmd "github.com/brickpop/packerd/cmd"
+	cmd "github.com/brickpop/triggerhub/cmd"
 )
 
 func main() {

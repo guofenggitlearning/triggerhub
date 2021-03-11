@@ -20,8 +20,8 @@ jobs:
       
       - name: Build project
         run: |
-          go build -o dist/packerd 
-          zip packerd.zip dist/packerd
+          go build -o dist/triggerhub 
+          zip triggerhub.zip dist/triggerhub
 
       - name: Create Release
         id: create_release
@@ -40,6 +40,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./packerd.zip
-          asset_name: packerd.zip
+          asset_path: ./triggerhub.zip
+          asset_name: triggerhub.zip
           asset_content_type: application/zip
