@@ -15,13 +15,13 @@ type PathEntry struct {
 }
 
 // Init does the initial viper setup
-func Init(rootCmd *cobra.Command) {
+func Init(rootCmd *cobra.Command, serveCmd *cobra.Command) {
 	// config file
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
-	viper.BindPFlag("port", rootCmd.PersistentFlags().Lookup("port"))
-	viper.BindPFlag("cert", rootCmd.PersistentFlags().Lookup("cert"))
-	viper.BindPFlag("key", rootCmd.PersistentFlags().Lookup("key"))
-	viper.BindPFlag("tls", rootCmd.PersistentFlags().Lookup("tls"))
+	viper.BindPFlag("port", serveCmd.PersistentFlags().Lookup("port"))
+	viper.BindPFlag("cert", serveCmd.PersistentFlags().Lookup("cert"))
+	viper.BindPFlag("key", serveCmd.PersistentFlags().Lookup("key"))
+	viper.BindPFlag("tls", serveCmd.PersistentFlags().Lookup("tls"))
 
 	viper.AddConfigPath(".")
 

@@ -28,14 +28,11 @@ func init() {
 		Short: "Joins a Trigger Hub server",
 		Long:  `Registers to a Trigger Hub dispatcher service and waits for triggers to be reported`,
 		Run: func(cmd *cobra.Command, args []string) {
-			server.Run()
+			// server.Run()
+			fmt.Println("Joining")
 		},
 	}
 	rootCmd.AddCommand(serveCmd, joinCmd)
-
-	cobra.OnInitialize(func() {
-		config.Init(rootCmd)
-	})
 
 	// Read flags
 	rootCmd.PersistentFlags().String("config", "", "the config file to use")
@@ -43,6 +40,11 @@ func init() {
 	serveCmd.PersistentFlags().String("key", "", "the TLS encryption key file")
 	serveCmd.PersistentFlags().Bool("tls", false, "whether to use TLS encryption (cert and key required)")
 	serveCmd.PersistentFlags().IntP("port", "p", 8080, "port to bind to")
+
+	// Get params
+	cobra.OnInitialize(func() {
+		config.Init(rootCmd, serveCmd)
+	})
 }
 
 // Execute runs the cobra commands and parameters

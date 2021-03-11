@@ -4,14 +4,12 @@ import (
 	"crypto/tls"
 	"fmt"
 	"log"
-	"os"
-	"time"
 
 	"github.com/brickpop/triggerhub/config"
 
 	fiber "github.com/gofiber/fiber/v2"
+	websocket "github.com/gofiber/websocket/v2"
 	"github.com/spf13/viper"
-	"github.com/walle/targz"
 )
 
 var paths []config.PathEntry
@@ -57,8 +55,14 @@ func Run() {
 		return ctx.SendStatus(fiber.StatusOK)
 	})
 
-	app.Get("/backup/:id/:token", handleGet)
+	// Clients pushing triggers
+	app.Get("/triggers/:id/:token", handleGet)
 
+	// Services listening to us
+	app.Use("/ws", handleRequireWsUpgrade)
+	app.Get("/ws/:token", websocket.New(handleWsClient))
+
+	// Main listener
 	if useTLS {
 		// Read TLS certificate
 		cer, err := tls.LoadX509KeyPair(cert, key)
@@ -94,41 +98,73 @@ func handleGet(ctx *fiber.Ctx) error {
 		return ctx.SendString("Not found")
 	}
 
-	srcPath := ""
 	found := false
 	for i := 0; i < len(paths); i++ {
 		if paths[i].ID == id {
 			if paths[i].Token == token {
 				found = true
-				srcPath = paths[i].Path
 				break
 			}
+			log.Println("Not found", ctx.Path())
 			ctx.Status(fiber.StatusNotFound)
 			return ctx.SendString("Not found")
 		}
 	}
 	if !found {
+		log.Println("Not found", ctx.Path())
 		ctx.Status(fiber.StatusNotFound)
 		return ctx.SendString("Not found")
 	}
 
-	fileName := fmt.Sprintf("triggerhub-%d.tar.gz", time.Now().UnixNano())
-	outputFile := fmt.Sprintf("/tmp/%s", fileName)
+	log.Println("TO DO: Handle request", id, token)
+	return nil
+}
 
-	log.Println(fmt.Sprintf("[%s] Bundling %s into %s", id, srcPath, outputFile))
-	err := targz.Compress(srcPath, outputFile)
-	if err != nil {
-		ctx.Status(fiber.StatusInternalServerError)
-		log.Println(err)
-		return ctx.SendString("Internal server error")
+func handleRequireWsUpgrade(c *fiber.Ctx) error {
+	// IsWebSocketUpgrade returns true if the client
+	// requested upgrade to the WebSocket protocol.
+	if websocket.IsWebSocketUpgrade(c) {
+		c.Locals("allowed", true)
+		c.Locals("IP", c.IP())
+		return c.Next()
+	}
+	return fiber.ErrUpgradeRequired
+}
+
+func handleWsClient(c *websocket.Conn) {
+	// c.Locals is added to the *websocket.Conn
+	if c.Locals("allowed") != true {
+		log.Println("Closing non-upgraded connection")
+		c.WriteMessage(1, []byte(`{"error":true,"message":"Please, upgrade to web sockets"}`))
+		c.Close()
+		return
+	} else if c.Params("token") != "1234" {
+		log.Println("Unauthorized token", c.Params("token"))
+		c.WriteMessage(1, []byte(`{"error":true,"message":"Unauthorized"}`))
+		c.Close()
+		return
 	}
 
-	err = ctx.Download(outputFile, fileName)
-	if err != nil {
-		return err
-	}
-	log.Println(fmt.Sprintf("[%s] Done", id))
+	log.Println("Connection from", c.Locals("IP"))
 
-	err = os.Remove(outputFile)
-	return err
+	// websocket.Conn bindings https://pkg.go.dev/github.com/fasthttp/websocket?tab=doc#pkg-index
+	var (
+		msgType  int
+		msg []byte
+		err error
+	)
+	for {
+		if msgType, msg, err = c.ReadMessage(); err != nil {
+			log.Println("[read]", err)
+			break
+		}
+		// log.Printf("recv: %s", msg)
+
+		if err = c.WriteMessage(msgType, msg); err != nil {
+			log.Println("[write]", err)
+			break
+		}
+	}
+
+	log.Println("Disconnected", c.Locals("IP"))
 }
