@@ -1,0 +1,11 @@
+name: my-listener-name
+dispatcher:
+  url: wss://dispatcher-domain.com/ws
+  token: "0123456789abcdef"   # Has to match the server's auth token
+triggers:
+- action: restart-service-1
+  token: "1234567890123456789012345678901234567890"
+  command: /home/user/scripts/restart.sh
+- action: restart-service-2
+  token: "0123456789012345678901234567890123456789"
+  command: /home/user/scripts/restart.sh

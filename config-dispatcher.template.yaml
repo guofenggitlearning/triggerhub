@@ -1,0 +1,5 @@
+token: "0123456789abcdef"    # Authentication token for target servers
+port: 8443
+tls: true
+cert: /path/to/cert.pem   # not needed it tls = false
+key: /path/to/key.pem     # not needed it tls = false

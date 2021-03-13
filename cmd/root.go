@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/brickpop/triggerhub/config"
-	"github.com/brickpop/triggerhub/server"
+	"github.com/brickpop/triggerhub/services"
 	"github.com/spf13/cobra"
 )
 
@@ -20,11 +20,11 @@ func init() {
 		Short: "Start a dispatcher service",
 		Long:  `Starts a dispatcher service, listenint for HTTP and relaying to WS registered services`,
 		Run: func(cmd *cobra.Command, args []string) {
-			server.Run()
+			services.Serve()
 		},
 	}
-	joinCmd := &cobra.Command{
-		Use:   "join",
+	listenCmd := &cobra.Command{
+		Use:   "listen",
 		Short: "Joins a Trigger Hub server",
 		Long:  `Registers to a Trigger Hub dispatcher service and waits for triggers to be reported`,
 		Run: func(cmd *cobra.Command, args []string) {
@@ -32,10 +32,11 @@ func init() {
 			fmt.Println("Joining")
 		},
 	}
-	rootCmd.AddCommand(serveCmd, joinCmd)
+	rootCmd.AddCommand(serveCmd, listenCmd)
 
 	// Read flags
 	rootCmd.PersistentFlags().String("config", "", "the config file to use")
+
 	serveCmd.PersistentFlags().String("cert", "", "the certificate file (TLS only)")
 	serveCmd.PersistentFlags().String("key", "", "the TLS encryption key file")
 	serveCmd.PersistentFlags().Bool("tls", false, "whether to use TLS encryption (cert and key required)")
@@ -43,7 +44,8 @@ func init() {
 
 	// Get params
 	cobra.OnInitialize(func() {
-		config.Init(rootCmd, serveCmd)
+		config.DispatcherInit(rootCmd, serveCmd)
+		config.ListenerInit(rootCmd)
 	})
 }
 

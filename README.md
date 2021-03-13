@@ -10,7 +10,7 @@ Trigger Hub is a simple service that listens for trigger events on HTTP clients 
 go build -o build/triggerhub
 ```
 
-## Config
+## Parameters
 
 Parameters can be passed via command line of be defined in a config file
 
@@ -25,7 +25,7 @@ Usage:
 
 Available Commands:
   help        Help about any command
-  join        Joins a Trigger Hub server
+  listen      Joins a Trigger Hub server
   serve       Start a dispatcher service
 
 Flags:
@@ -35,59 +35,63 @@ Flags:
 Use "triggerhub [command] --help" for more information about a command.
 ```
 
-The config file is mandatory. However, CLI parameters can override the `port`, `cert`, `key` and `tls` for easier testing. 
+## Components
 
-### Config file
+### Dispatcher
 
-Copy `config.template.yaml` and adapt it to work for the data you want to back up.
+The dispatcher is typically running on an external server (different to the target server handling actual work load). The dispatcher exposes an HTTP(s)/WS(s) endpoint that can be called by two actors:
 
+- Web clients
+  - Typically from a web browser
+  - Requesting the invokation of an action on the target server
+- The target server (listener)
+  - Declares the supported action ID's that dispatcher clients may call
+  - Listens to messages on the dispatcher's web socket
+
+#### Config file
+
+In dispatcher mode, the config file is optional. By default, triggerhub attempts to use `config.yaml` from the current directory. To use a config file on a different path:
+
+```sh
+$ triggerhub serve --config my-config.yaml
+```
+
+Copy `config-dispatcher.template.yaml` and adapt it to work for the data you want to back up.
 
 ```yaml
+token: "1234"    # Authentication token for target servers
 port: 8443
 tls: true
 cert: /path/to/cert.pem   # not needed it tls = false
 key: /path/to/key.pem     # not needed it tls = false
-paths:
-- id: media
+```
+
+CLI parameters can override the `port`, `cert`, `key` and `tls` for easier testing. 
+
+### Listener
+
+Trigger Hub listeners are the hosts where the actual action is going to be executed. When running as a listener, no port is exposed and rather, a WS connection is made to the dispatcher. 
+
+#### Config file
+
+The config file is required to run in listener mode. By default, triggerhub also tries to use `config.yaml` from the current directory. To use a config file on a different path:
+
+```sh
+$ triggerhub listen --config my-config.yaml
+```
+
+Copy `config-listener.template.yaml` and adapt it to work for the data you want to back up.
+
+```yaml
+name: my-listener-name
+dispatcher:
+  url: wss://dispatcher-domain.com/ws
+  token: "1234"   # Has to match the server's auth token
+triggers:
+- action: restart-service-1
   token: "1234567890123456789012345678901234567890"
-  path: /var/lib/media
-- id: other
+  command: /home/user/scripts/restart.sh
+- action: restart-service-2
   token: "0123456789012345678901234567890123456789"
-  path: /var/lib/other
-```
-
-By default, `config.yaml` is attempted on the current directory. Otherwise:
-
-```sh
-$ triggerhub --config my-config.yaml
-```
-
-## Fetching the back up remotely
-
-From a remote location, make a GET request like so:
-
-```sh
-$ NAME = "media"
-$ TOKEN = "1234567890123456789012345678901234567890"
-$ curl https://my-server.net:8443/backup/$NAME/$TOKEN > $NAME.tar.gz
-```
-
-## Using a self signed certificate
-
-```sh
-$ openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 10000 -nodes
-```
-
-Then, run `triggerhub`:
-
-```sh
-$ triggerhub --tls --cert cert.pem --key key.pem -p 8443
-```
-
-And finally, tell `curl` to accept the self-signed certificate.
-
-```sh
-$ NAME = "media"
-$ TOKEN = "1234567890123456789012345678901234567890"
-$ curl --insecure https://localhost:8443/backup/$NAME/$TOKEN > $NAME.tar.gz
+  command: /home/user/scripts/restart.sh
 ```

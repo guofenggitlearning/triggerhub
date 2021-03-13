@@ -1,21 +1,25 @@
 package config
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-// PathEntry defines the settings of a path to back up
-type PathEntry struct {
-	ID    string
-	Path  string
+// DispatcherEntry contains the settings of the remote dispatcher
+type DispatcherEntry struct {
+	URL   string `mapstructure:"url"`
 	Token string `mapstructure:"token"`
 }
 
+// ActionEntry defines an action supported by the listener
+type ActionEntry struct {
+	Action  string `mapstructure:"action"`
+	Token   string `mapstructure:"token"`
+	Command string `mapstructure:"command"`
+}
+
 // Init does the initial viper setup
-func Init(rootCmd *cobra.Command, serveCmd *cobra.Command) {
+func DispatcherInit(rootCmd *cobra.Command, serveCmd *cobra.Command) {
 	// config file
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
 	viper.BindPFlag("port", serveCmd.PersistentFlags().Lookup("port"))
@@ -30,6 +34,25 @@ func Init(rootCmd *cobra.Command, serveCmd *cobra.Command) {
 	// viper.AutomaticEnv()
 
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		// fmt.Println("Using config file:", viper.ConfigFileUsed())
+	}
+}
+
+// Init does the initial viper setup
+func ListenerInit(rootCmd *cobra.Command) {
+	// config file
+	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
+
+	viper.AddConfigPath(".")
+
+	var configFile = viper.GetString("config")
+	if configFile == "" {
+		return
+	}
+
+	viper.SetConfigFile(configFile)
+
+	if err := viper.ReadInConfig(); err == nil {
+		// fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
 }
