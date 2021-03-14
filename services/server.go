@@ -191,7 +191,7 @@ func handleWsClient(c *websocket.Conn) {
 
 		switch decodedMessage.Command {
 		case "register":
-			err := registerListener(decodedMessage, c, msgType, fmt.Sprintf("%v", c.Locals("IP")))
+			err := registerListener(decodedMessage, c, msgType, c.Locals("IP").(string))
 			if err != nil {
 				c.WriteMessage(msgType, []byte(fmt.Sprintf(`{"ok":false,"message":"%s"}`, err.Error())))
 			} else {
