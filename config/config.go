@@ -13,12 +13,12 @@ type DispatcherEntry struct {
 
 // ActionEntry defines an action supported by the listener
 type ActionEntry struct {
-	Action  string `mapstructure:"action"`
+	Name    string `mapstructure:"name"`
 	Token   string `mapstructure:"token"`
 	Command string `mapstructure:"command"`
 }
 
-// Init does the initial viper setup
+// DispatcherInit does the initial viper setup
 func DispatcherInit(rootCmd *cobra.Command, serveCmd *cobra.Command) {
 	// config file
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))
@@ -38,7 +38,7 @@ func DispatcherInit(rootCmd *cobra.Command, serveCmd *cobra.Command) {
 	}
 }
 
-// Init does the initial viper setup
+// ListenerInit does the initial viper setup
 func ListenerInit(rootCmd *cobra.Command) {
 	// config file
 	viper.BindPFlag("config", rootCmd.PersistentFlags().Lookup("config"))

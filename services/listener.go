@@ -1,170 +1,173 @@
 package services
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log"
+	"net/url"
+	"os"
+	"os/signal"
+	"time"
 
 	"github.com/brickpop/triggerhub/config"
-
-	fiber "github.com/gofiber/fiber/v2"
-	websocket "github.com/gofiber/websocket/v2"
+	"github.com/gorilla/websocket"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
 var actions []config.ActionEntry
+var dispatcher struct {
+	host  string
+	tls   bool
+	token string
+}
 
-// Listen starts a server and listens for requests
+// Listen connects to the dispatcher and listens for actions
 func Listen() {
-	var configFile = viper.GetString("config")
-	var port = viper.GetInt("port")
-	var useTLS = viper.GetBool("tls")
-	var cert = viper.GetString("cert")
-	var key = viper.GetString("key")
+	readConfig()
 
-	// info
-	if useTLS {
-		if cert == "" || key == "" {
-			log.Fatal("The certificate and key file are needed to run with TLS enabled")
+	// Signals
+	interrupt := make(chan os.Signal, 1)
+	signal.Notify(interrupt, os.Interrupt)
+
+	// Connect
+	var scheme string
+	if dispatcher.tls {
+		scheme = "wss"
+	} else {
+		scheme = "ws"
+	}
+	u := url.URL{Scheme: scheme, Host: *&dispatcher.host, Path: fmt.Sprintf("/ws/%s", dispatcher.token)}
+	log.Printf("[listener] Connecting to %s", dispatcher.host)
+
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		log.Fatal("[listener] Dial:", err)
+	}
+	defer c.Close()
+
+	sendRegisterMessage(c)
+
+	done := make(chan struct{})
+
+	// Processing loop
+	go func() {
+		defer close(done)
+		for {
+			var message RelayedAction
+			err := c.ReadJSON(&message)
+			if err != nil {
+				log.Println("[read]", err)
+				return
+			}
+			// Launch
+			err = handleIncomingTrigger(message)
+			if err != nil {
+				log.Println("[result]", err)
+				err = c.WriteJSON(ResultMessage{Ok: false, Message: err.Error()})
+				continue
+			}
+			err = c.WriteJSON(ResultMessage{Ok: true})
+			if err != nil {
+				log.Println("[result]", err)
+			}
 		}
-		log.Println("TLS enabled")
+	}()
+
+	for {
+		select {
+		case <-done:
+			return
+		// case t := <-ticker.C:
+		// 	err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
+		// 	if err != nil {
+		// 		log.Println("write:", err)
+		// 		return
+		// 	}
+		case <-interrupt:
+			log.Println("[listener] Received SIGINT")
+
+			// Cleanly close the connection by sending a close message and then
+			// waiting (with timeout) for the server to close the connection.
+			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			if err != nil {
+				log.Println("[listener]:", err)
+				return
+			}
+			select {
+			case <-done:
+			case <-time.After(time.Second):
+			}
+			return
+		}
+	}
+}
+
+func sendRegisterMessage(c *websocket.Conn) {
+	name := viper.GetString("name")
+
+	err := c.WriteJSON(ListenerMessage{Command: "register", Name: name, Actions: []string{"a", "b", "c"}})
+	if err != nil {
+		log.Println("[register]:", err)
+		return
 	}
 
+	var response ResultMessage
+	err = c.ReadJSON(&response)
+	if err != nil {
+		log.Fatalln("[register]", err)
+	} else if !response.Ok {
+		log.Fatalln("[register]", response.Message)
+	}
+	log.Println("[register] Connected")
+}
+
+func handleIncomingTrigger(action RelayedAction) error {
+	log.Println("[request]", action)
+
+	for i := 0; i < len(actions); i++ {
+		if actions[i].Name == action.Action {
+			if actions[i].Token != action.Token {
+				return errors.Errorf("Invalid token")
+			}
+
+			return launchActionCommand(actions[i].Command)
+		}
+	}
+
+	return errors.Errorf("Not found")
+}
+
+func launchActionCommand(command string) error {
+
+	log.Println("DO ACTION", command)
+	return nil
+}
+
+// HELPERS
+
+func readConfig() {
+	var configFile = viper.GetString("config")
+
 	// info
-	if configFile != "" {
-		log.Println("Using config file", configFile)
+	if configFile == "" {
+		log.Fatal("[config] The config file is required")
 	}
 
 	// config entries
 	err := viper.UnmarshalKey("actions", &actions)
 	if err != nil {
 		log.Fatal(err)
+	} else if len(actions) == 0 {
+		log.Fatal("[config] No actions are defined")
 	}
 
-	// Service set up
-	app := fiber.New()
+	dispatcher.host = viper.GetString("dispatcher.host")
+	dispatcher.tls = viper.GetBool("dispatcher.tls")
+	dispatcher.token = viper.GetString("dispatcher.token")
 
-	app.Use(func(ctx *fiber.Ctx) error {
-		ctx.Set("Access-Control-Allow-Origin", "*")
-		ctx.Set("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
-		return ctx.Next()
-	})
-
-	app.Options("*", func(ctx *fiber.Ctx) error {
-		ctx.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		return ctx.SendStatus(fiber.StatusOK)
-	})
-
-	// Clients pushing triggers
-	app.Get("/triggers/:id/:token", handleGet)
-
-	// Services listening to us
-	app.Use("/ws", handleRequireWsUpgrade)
-	app.Get("/ws/:token", websocket.New(handleWsClient))
-
-	// Main listener
-	if useTLS {
-		// Read TLS certificate
-		cer, err := tls.LoadX509KeyPair(cert, key)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		tlsConfig := &tls.Config{Certificates: []tls.Certificate{cer}}
-		addr := fmt.Sprintf(":%d", port)
-
-		// Create custom listener
-		ln, err := tls.Listen("tcp", addr, tlsConfig)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		log.Println("Listening TLS on", addr)
-		log.Fatal(app.Listener(ln))
-	} else {
-		addr := fmt.Sprintf(":%d", port)
-		log.Println("Listening HTTP on", addr)
-		log.Fatal(app.Listen(addr))
+	if dispatcher.host == "" {
+		log.Fatal("[config] No dispatcher host defined")
+	} else if dispatcher.token == "" {
+		log.Fatal("[config] No dispatcher token defined")
 	}
 }
-
-// // handleGet handles the request to run a certain trigger
-// func handleGet(ctx *fiber.Ctx) error {
-// 	var id = ctx.Params("id")
-// 	var token = ctx.Params("token")
-
-// 	if id == "" || token == "" {
-// 		ctx.Status(fiber.StatusNotFound)
-// 		return ctx.SendString("Not found")
-// 	}
-
-// 	found := false
-// 	for i := 0; i < len(paths); i++ {
-// 		if paths[i].ID == id {
-// 			if paths[i].Token == token {
-// 				found = true
-// 				break
-// 			}
-// 			log.Println("Not found", ctx.Path())
-// 			ctx.Status(fiber.StatusNotFound)
-// 			return ctx.SendString("Not found")
-// 		}
-// 	}
-// 	if !found {
-// 		log.Println("Not found", ctx.Path())
-// 		ctx.Status(fiber.StatusNotFound)
-// 		return ctx.SendString("Not found")
-// 	}
-
-// 	log.Println("TO DO: Handle request", id, token)
-// 	return nil
-// }
-
-// func handleRequireWsUpgrade(c *fiber.Ctx) error {
-// 	// IsWebSocketUpgrade returns true if the client
-// 	// requested upgrade to the WebSocket protocol.
-// 	if websocket.IsWebSocketUpgrade(c) {
-// 		c.Locals("allowed", true)
-// 		c.Locals("IP", c.IP())
-// 		return c.Next()
-// 	}
-// 	return fiber.ErrUpgradeRequired
-// }
-
-// func handleWsClient(c *websocket.Conn) {
-// 	// c.Locals is added to the *websocket.Conn
-// 	if c.Locals("allowed") != true {
-// 		log.Println("Closing non-upgraded connection")
-// 		c.WriteMessage(1, []byte(`{"error":true,"message":"Please, upgrade to web sockets"}`))
-// 		c.Close()
-// 		return
-// 	} else if c.Params("token") != "1234" {
-// 		log.Println("Unauthorized token", c.Params("token"))
-// 		c.WriteMessage(1, []byte(`{"error":true,"message":"Unauthorized"}`))
-// 		c.Close()
-// 		return
-// 	}
-
-// 	log.Println("Connection from", c.Locals("IP"))
-
-// 	// websocket.Conn bindings https://pkg.go.dev/github.com/fasthttp/websocket?tab=doc#pkg-index
-// 	var (
-// 		msgType int
-// 		msg     []byte
-// 		err     error
-// 	)
-// 	for {
-// 		if msgType, msg, err = c.ReadMessage(); err != nil {
-// 			log.Println("[read]", err)
-// 			break
-// 		}
-// 		// log.Printf("recv: %s", msg)
-
-// 		if err = c.WriteMessage(msgType, msg); err != nil {
-// 			log.Println("[write]", err)
-// 			break
-// 		}
-// 	}
-
-// 	log.Println("Disconnected", c.Locals("IP"))
-// }

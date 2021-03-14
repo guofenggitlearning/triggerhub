@@ -28,8 +28,7 @@ func init() {
 		Short: "Joins a Trigger Hub server",
 		Long:  `Registers to a Trigger Hub dispatcher service and waits for triggers to be reported`,
 		Run: func(cmd *cobra.Command, args []string) {
-			// server.Run()
-			fmt.Println("Joining")
+			services.Listen()
 		},
 	}
 	rootCmd.AddCommand(serveCmd, listenCmd)

@@ -21,6 +21,10 @@ const (
 	ActionFailed
 )
 
+type ResultMessage struct {
+	Ok      bool   `json:"ok"`
+	Message string `json:"message"`
+}
 type RelayedAction struct {
 	Action string `json:"action"`
 	Token  string `json:"token"`
@@ -125,8 +129,7 @@ func handleGet(ctx *fiber.Ctx) error {
 		for j := 0; j < len(listeners[i].actions); j++ {
 			if listeners[i].actions[j].name == action {
 				found = true
-				log.Println("Relaying", action, "to", listeners[i].name)
-				notifyListener(listeners[i], action, token)
+				notifyListener(listeners[i], action, token, listeners[i].name)
 
 				// Many listeners could declare the same action name, navigate all
 				continue
@@ -156,69 +159,76 @@ func handleRequireWsUpgrade(c *fiber.Ctx) error {
 func handleWsClient(c *websocket.Conn) {
 	// c.Locals is added to the *websocket.Conn
 	if c.Locals("allowed") != true {
-		log.Println("Closing non-upgraded connection")
-		c.WriteMessage(1, []byte(`{"ok":false,"message":"Please, upgrade to web sockets"}`))
+		log.Println("[WS] Closing non-upgraded connection")
+		c.WriteJSON(ResultMessage{Ok: false, Message: "Please, upgrade to web sockets"})
 		c.Close()
 		return
 	} else if c.Params("token") != viper.GetString("token") {
-		log.Println("Unauthorized token", c.Params("token"))
-		c.WriteMessage(1, []byte(`{"ok":false,"message":"Unauthorized"}`))
+		log.Println("[WS] Unauthorized token", c.Params("token"))
+		c.WriteJSON(ResultMessage{Ok: false, Message: "Unauthorized"})
 		c.Close()
 		return
 	}
 
-	log.Println("Connection from", c.Locals("IP"))
+	log.Println("[WS] Connection from", c.Locals("IP"))
 
 	// websocket.Conn bindings https://pkg.go.dev/github.com/fasthttp/websocket?tab=doc#pkg-index
 	var (
-		msgType int
-		msg     []byte
-		err     error
+		msgType    int
+		rawMessage []byte
+		err        error
 	)
 	for {
-		if msgType, msg, err = c.ReadMessage(); err != nil {
-			log.Println("[read]", err)
+		// Read raw
+		if msgType, rawMessage, err = c.ReadMessage(); err != nil {
+			log.Println("[WS]", err)
 			break
 		}
 
-		var decodedMessage ListenerMessage
-		if err := json.Unmarshal(msg, &decodedMessage); err != nil {
-			log.Println("[read] Could not unmarshall the message", err)
-			c.WriteMessage(msgType, []byte(`{"ok":false}`))
-			c.Close()
-			break
-		}
+		handleIncomingMessage(c, rawMessage, msgType)
 
-		switch decodedMessage.Command {
-		case "register":
-			err := registerListener(decodedMessage, c, msgType, c.Locals("IP").(string))
-			if err != nil {
-				c.WriteMessage(msgType, []byte(fmt.Sprintf(`{"ok":false,"message":"%s"}`, err.Error())))
-			} else {
-				c.WriteMessage(msgType, []byte(`{"ok":true}`))
-			}
-			break
-		default:
-			log.Println("[read] Unrecognized command", decodedMessage.Command)
-		}
-
-		// if err = c.WriteMessage(msgType, msg); err != nil {
-		// 	log.Println("[write]", err)
-		// 	break
-		// }
 	}
 
-	log.Println("Disconnected", c.Locals("IP"))
-	unregisterListener(c)
+	log.Println("[WS] Disconnected", c.Locals("IP"))
+	removeListener(c)
 }
 
 // Helpers
 
-func registerListener(decodedMessage ListenerMessage, connection *websocket.Conn, msgType int, ip string) error {
+func handleIncomingMessage(c *websocket.Conn, rawMessage []byte, msgType int) {
+	var decodedMessage ListenerMessage
+
+	if err := json.Unmarshal(rawMessage, &decodedMessage); err != nil {
+		log.Println("[WS] Could not unmarshall the message", err)
+		log.Println("[WS] Disconnecting", c.Locals("IP"))
+		c.WriteJSON(ResultMessage{Ok: false})
+		c.Close()
+		return
+	}
+
+	// Special listener commands
+	switch decodedMessage.Command {
+	case "register":
+		err := addListener(decodedMessage, c, msgType, c.Locals("IP").(string))
+		if err != nil {
+			c.WriteJSON(ResultMessage{Ok: false, Message: err.Error()})
+		} else {
+			c.WriteJSON(ResultMessage{Ok: true})
+		}
+		break
+	default:
+		if decodedMessage.Command != "" {
+			log.Printf("[WS] Unrecognized command from %s: %s", c.Locals("IP"), decodedMessage.Command)
+			c.WriteMessage(msgType, []byte(`{"ok":false,"message":"Unrecognized command"}`))
+		}
+	}
+}
+
+func addListener(decodedMessage ListenerMessage, connection *websocket.Conn, msgType int, ip string) error {
 	// Check for duplicates
 	for i := 0; i < len(listeners); i++ {
-		if listeners[i].name == decodedMessage.Name {
-			return errors.Errorf("A service with the same name is already registered")
+		if listeners[i].name == decodedMessage.Name && listeners[i].ip == ip {
+			return errors.Errorf("A service with the same name is already registered from this host")
 		}
 	}
 
@@ -241,11 +251,11 @@ func registerListener(decodedMessage ListenerMessage, connection *websocket.Conn
 	}
 	listeners = append(listeners, newListener)
 
-	log.Printf("[%s] Registered %s", decodedMessage.Name, ip)
+	log.Printf("[WS] Registered %s (%s)", decodedMessage.Name, ip)
 	return nil
 }
 
-func unregisterListener(c *websocket.Conn) {
+func removeListener(c *websocket.Conn) {
 	name := ""
 	ip := ""
 
@@ -262,7 +272,7 @@ func unregisterListener(c *websocket.Conn) {
 	}
 
 	if idx < 0 {
-		log.Println("[err] Listener item not found")
+		// log.Println("[err] Listener item not found")
 		return
 	}
 
@@ -270,18 +280,21 @@ func unregisterListener(c *websocket.Conn) {
 		listeners[len(listeners)-1], listeners[idx] = listeners[idx], listeners[len(listeners)-1]
 	}
 	listeners = listeners[:len(listeners)-1]
-	log.Printf("[%s] Unregistered %s", name, ip)
+	log.Printf("[WS] Unregistered %s (%s)", name, ip)
 }
 
-func notifyListener(listener Listener, action string, token string) {
-	relayedAction := RelayedAction{
-		Action: action,
-		Token:  token,
+func notifyListener(listener Listener, action string, token string, listenerName string) {
+	log.Println("[http] Relaying", action, "to", listenerName)
+	err := listener.connection.WriteJSON(RelayedAction{Action: action, Token: token})
+	if err != nil {
+		log.Printf("[%s] Error: %v", listener.name, err)
+		return
 	}
-	relayedActionPayload, _ := json.Marshal(relayedAction)
 
-	err := listener.connection.WriteMessage(listener.msgType, []byte(relayedActionPayload))
+	var response ResultMessage
+	err = listener.connection.ReadJSON(&response)
 	if err != nil {
 		log.Printf("[%s] Error: %v", listener.name, err)
 	}
+	log.Println("[result]", response)
 }
