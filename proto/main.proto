@@ -1,0 +1,44 @@
+syntax = "proto3";
+option go_package = "github.com/brickpop/triggerhub/proto";
+
+// Enums
+
+enum ActionStatus {
+    IDLE = 0;
+    RUNNING = 1;
+    FAILED = 2;
+    DONE = 3;
+}
+
+// Messages
+
+message ListenerParams {
+    string name = 1;
+    string token = 2;
+    repeated string actions = 3;
+}
+message ActionRequest {
+    string name = 1;
+    string token = 2;
+}
+// message ActionDetails {
+//     string name = 1;
+//     string token = 2;
+//     string command = 3;
+// }
+message ActionResult {
+    bool ok = 1;
+    string message = 2;
+}
+message RegisterResult {
+    bool ok = 1;
+    string message = 2;
+}
+
+// Services
+
+service TriggerHub {
+    rpc RegisterListener(ListenerParams) returns (RegisterResult) {}
+
+    rpc PullTriggers(Void) returns (stream ActionRequest) {}
+}

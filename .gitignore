@@ -1,3 +1,4 @@
 *.tar.gz
 config.yaml
 build
+bin
