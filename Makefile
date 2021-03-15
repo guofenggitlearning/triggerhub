@@ -1,5 +1,5 @@
 SHELL := /bin/bash
-PATH  := $(PATH):./bin:$(HOME)/go/bin
+PATH  := $(PATH):$(shell go env GOPATH)/bin
 .DEFAULT_GOAL := help
 
 PROJECT_NAME=$(shell basename "$(PWD)")
@@ -30,7 +30,9 @@ define install_protoc_go
 		export GOPATH="$$HOME/go" ;\
 	fi ; \
 	go get google.golang.org/protobuf/cmd/protoc-gen-go ; \
-	go install google.golang.org/protobuf/cmd/protoc-gen-go
+	go install google.golang.org/protobuf/cmd/protoc-gen-go ; \
+	go get google.golang.org/grpc/cmd/protoc-gen-go-grpc ; \
+	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc
 endef
 
 #-----------------------------------------------------------------------
@@ -50,11 +52,11 @@ help:
 ## :
 
 ## init: Install external dependencies
-init: protoc protoc-go-plugin
+init: $(PROTOC) protoc-go-plugin
 
 ## clean: Remove the build artifacts
 clean:
-	rm -Rf build bin proto/*.go
+	rm -Rf build proto/*.go
 
 ## :
 
@@ -66,19 +68,19 @@ clean:
 ## all: Generate the source code for all supported languages
 all: $(TARGETS)
 
-$(TARGETS): $(SOURCES)
+$(TARGETS): $(PROTOC) $(SOURCES)
 	rm -rf $@
 	mkdir -p proto
-	for f in $^ ; do \
-		$(PROTOC) --go_opt=paths=source_relative --experimental_allow_proto3_optional -I=$(PWD)/proto --go_out=$(PWD)/proto $(PWD)/$$f ; \
-	done
+	$(PROTOC) -I=$(PWD)/proto \
+		--go_out=$(PWD)/proto --go_opt=paths=source_relative \
+		--go-grpc_out=$(PWD)/proto --go-grpc_opt=paths=source_relative \
+		$(patsubst %, $(PWD)/%, $(SOURCES))
 
 #-----------------------------------------------------------------------
 # COMPILERS
 #-----------------------------------------------------------------------
 
-.PHONY: protoc
-protoc:
+$(PROTOC):
 	$(call install_protoc)
 	@echo "Using protoc from $(PROTOC)"
 

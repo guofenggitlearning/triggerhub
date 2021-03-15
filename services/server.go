@@ -1,16 +1,30 @@
 package services
 
 import (
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 
 	fiber "github.com/gofiber/fiber/v2"
 	websocket "github.com/gofiber/websocket/v2"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
+
+	pb "github.com/brickpop/triggerhub/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/status"
 )
+
+type grpcServer struct {
+	pb.UnimplementedTriggerHubServer
+
+	registerToken string
+}
 
 type ActionStatus int
 
@@ -49,7 +63,6 @@ var listeners []Listener
 
 // Serve starts a server and listens for requests
 func Serve() {
-	var port = viper.GetInt("port")
 	var useTLS = viper.GetBool("tls")
 	var cert = viper.GetString("cert")
 	var key = viper.GetString("key")
@@ -67,7 +80,15 @@ func Serve() {
 		log.Println("TLS enabled")
 	}
 
-	// Service set up
+	// Services
+
+	go startFiber(useTLS, cert, key)
+
+	startGrpc(useTLS, cert, key)
+}
+
+func startFiber(useTLS bool, certFile string, keyFile string) {
+	var port = viper.GetInt("port.web")
 	app := fiber.New()
 
 	app.Use(func(ctx *fiber.Ctx) error {
@@ -84,14 +105,10 @@ func Serve() {
 	// listeners pushing actions
 	app.Get("/actions/:action/:token", handleGet)
 
-	// Services listening to us
-	app.Use("/ws", handleRequireWsUpgrade)
-	app.Get("/ws/:token", websocket.New(handleWsClient))
-
 	// Main listener
 	if useTLS {
 		// Read TLS certificate
-		cer, err := tls.LoadX509KeyPair(cert, key)
+		cer, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -112,6 +129,31 @@ func Serve() {
 		log.Println("Listening HTTP on", addr)
 		log.Fatal(app.Listen(addr))
 	}
+}
+
+func startGrpc(useTLS bool, certFile string, keyFile string) {
+	var port = viper.GetInt("port.grpc")
+
+	srv := &grpcServer{
+		registerToken: viper.GetString("token"),
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Fatalf("Cannot listen: %v", err)
+	}
+
+	var opts []grpc.ServerOption
+	if useTLS {
+		creds, err := credentials.NewServerTLSFromFile(certFile, keyFile)
+		if err != nil {
+			log.Fatalf("Cannot read TLS credentials %v", err)
+		}
+		opts = []grpc.ServerOption{grpc.Creds(creds)}
+	}
+	grpcServer := grpc.NewServer(opts...)
+	pb.RegisterTriggerHubServer(grpcServer, srv)
+	grpcServer.Serve(lis)
 }
 
 // handleGet handles the request to run a certain trigger
@@ -297,4 +339,21 @@ func notifyListener(listener Listener, action string, token string, listenerName
 		log.Printf("[%s] Error: %v", listener.name, err)
 	}
 	log.Println("[result]", response)
+}
+
+//
+
+// RegisterListener does what it suggests
+func (s *grpcServer) RegisterListener(ctx context.Context, params *pb.ListenerParams) (*pb.RegisterResult, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterListener not implemented")
+}
+
+// PullTriggers keeps an open connection to push events to the listener
+func (s *grpcServer) PullTriggers(_ *pb.Void, stream pb.TriggerHub_PullTriggersServer) error {
+	return status.Errorf(codes.Unimplemented, "method PullTriggers not implemented")
+}
+
+// PushResult receives the result of a trigger execution
+func (s *grpcServer) PushResult(ctx context.Context, result *pb.ExecutionResult) (*pb.Void, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PushResult not implemented")
 }

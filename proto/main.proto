@@ -12,6 +12,8 @@ enum ActionStatus {
 
 // Messages
 
+message Void {}
+
 message ListenerParams {
     string name = 1;
     string token = 2;
@@ -21,14 +23,13 @@ message ActionRequest {
     string name = 1;
     string token = 2;
 }
-// message ActionDetails {
-//     string name = 1;
-//     string token = 2;
-//     string command = 3;
-// }
 message ActionResult {
     bool ok = 1;
     string message = 2;
+}
+message ExecutionResult {
+    bool ok = 1;
+    string name = 2;
 }
 message RegisterResult {
     bool ok = 1;
@@ -39,6 +40,6 @@ message RegisterResult {
 
 service TriggerHub {
     rpc RegisterListener(ListenerParams) returns (RegisterResult) {}
-
     rpc PullTriggers(Void) returns (stream ActionRequest) {}
+    rpc PushResult(ExecutionResult) returns (Void) {}
 }
