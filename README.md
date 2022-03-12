@@ -1,3 +1,4 @@
+# 多传感器融合同步 误差5ms
 # Trigger Hub
 
 Trigger Hub is a simple service that listens for trigger events on HTTP clients and relays them to subscribed services that may not want to expose a dedicated port. In this way, triggers are pulled on the service instead of directly pushed by clients, which adds an extra layer of isolation.
